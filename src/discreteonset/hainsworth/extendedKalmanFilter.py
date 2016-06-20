@@ -15,16 +15,18 @@ def main():
     state_estimate = [None]*1001
     state_cov_estimate = [None]*1001
 
-    state_actual[0] = np.array(((0,),(1,)))
-    state_estimate[0] = np.array(((0,),(1,)),dtype=np.float64)
+    state_actual[0] = np.array(((0,),(1,)),dtype=np.float64)
+    state_estimate[0] = np.array(((2*np.random.randn(),),
+        (10.*np.random.rand(),)))
+    #state_estimate[0] = np.array(((0,),(1,)),dtype=np.float64)
     state_cov_estimate[0] = Q
+
+    print 'state_estimate =', state_estimate[0]
 
     for n in range(1000):
 
-        print "n =", n
-
         state_actual[n+1] = (np.dot(Phi,state_actual[n]) + 
-            q*np.random.randn(2,1))
+            np.array(((q*np.random.randn(1),),(0.,))))
         state_observed[n+1] = (np.dot(H,state_actual[n+1]) + 
             r*np.random.randn())
     
