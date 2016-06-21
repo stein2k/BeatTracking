@@ -1,59 +1,72 @@
+import numpy as np
 import prior
 
 class Particle(object):
     def __init__(self):
 
         # initialize particle
-        self.theta = None
+        self.theta = np.array(((0.,),(0.,)),dtype=np.float64)
 
         # initialize Kalman filter properties
-        self.thetak = None
-        self.P = np.eye(2)
+        self.xkk = np.array(((0.,),(1.,)),dtype=np.float64)
+        self.Pkk = np.eye(2)
 
-    def setup(self):
-        self.setupImpl()
+        self.H = np.array(((1.,0.),),dtype=np.float64)
 
-    def step(self,observation):
+    def step(self,observation,beatlocation=None):
 
         # determine time delta between beats
-        gamma = prior.nextBeatLocation()
+        if beatlocation is None:
+            gamma = prior.nextBeatLocation()
+        else:
+            gamma = beatlocation
 
         # compose transition matrix
-        PHI = np.array([[1.0,np.float64(gamma)],[0.,1.]])
+        PHI = np.array(((1.0,gamma),(0.,1.)),dtype=np.float64)
 
-        # propagate particle to a new location ck
-        self.theta = np.dot(PHI,self.theta)
+        # compose covariance matrix
+        Q = np.array((((gamma**3)/3.0,(gamma**2)/2.0),
+            ((gamma**2)/2.0,gamma)),dtype=np.float64)
 
         # update covariance estimate using
         # Kalman filter
 
         # time update (prediction)
-        theta_est = np.dot(PHI,self.thetak)
-        P_est = (np.dot(PHI,np.dot(self.P,PHI.T)) +
-            np.eye(2))
+        x_est = np.dot(PHI,self.xkk)
+        P_est = (np.dot(PHI,np.dot(self.Pkk,PHI.T)) + 
+            1.0e-6*Q)
 
         # update
-        y = observation - np.dot(self.H,theta_est)
-        S = np.dot(self.H,np.dot(P_est,self.H.T)) + np.eye(1)
+        y = observation - np.dot(self.H,x_est)
+        S = (np.dot(self.H,np.dot(P_est,self.H.T)) + 
+            1.0e-6*np.eye(1))
         K = np.dot(np.dot(P_est,self.H.T),np.linalg.inv(S))
-        self.thetak = self.thetak + np.dot(K,y)
-        self.P = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
+        self.xkk = x_est + np.dot(K,y)
+        self.Pkk = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
 
-        #
-        ((np.det(2.0*np.pi*self.P)**(-0.5)) *
-            np.exp(-0.5*np.dot(np.dot(np.transpose(theta_est-self.theta),
-            np.linalg.inv(self.P)),theta_est-self.theta)))
+        q = ((np.linalg.det(2.0*np.pi*self.Pkk)**(-0.5)) * 
+            np.exp(-0.5*np.dot(np.dot(np.transpose(theta-self.xkk),
+            self.Pkk),theta-self.xkk)))
 
-        # update
-        self.theta = [prior.nextBeatLocation(),
-            60.0/np.float64(np.random.rand]
+        # draw next state from prior distribution
+        randomState = prior.mvnrnd(self.xkk,self.Pkk)
 
-    def setupImpl(self):
+        self.theta = randomState
 
-        # sample from initial prior distribution
-        self.theta = np.array(((prior.nextBeatLocation(),),
-            (60.0/(140.*np.random.rand()+60.),)))
+        print "  self.theta =", self.theta
 
-        # compute initial weight
-        self.weight = ((prior.stateTransitionPrior(self.theta[0]) *
-            observationPrior()
+if __name__ == '__main__':
+
+    particle = Particle()
+
+    tempo = (1.0 / (140. * np.random.rand() + 60.))
+
+    theta = np.array(((0.,),(tempo,)))
+    particle.theta = theta
+
+    for n in range(100):
+        nextbeat = prior.nextBeatLocation()
+        PHI = np.array(((1.,nextbeat),(0.,1.)),dtype=np.float64)
+        theta = np.dot(PHI,theta)
+        print "theta =", theta
+        particle.step(theta[0,0],nextbeat)
