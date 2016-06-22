@@ -3,21 +3,13 @@ import numpy as np
 
 eps = sys.float_info.epsilon
 
-class __Private:
+class _Private:
 
-    def __init__(self):
+    pdf = None
+    cdf = None
 
-        # define prior pdf
-        self.pdf = np.zeros((24,),dtype=np.float64)
-        for i in range(24):
-            self.pdf[i] = np.exp(-0.5*np.log2(self.reduce_denom(
-                np.float64(i+1)/24.0)))
-        self.pdf = self.pdf/np.sum(self.pdf)
-
-        # define prior cdf
-        self.cdf = np.cumsum(self.pdf)
-    
-    def rat(self,X,tol=1e-6):
+    @staticmethod 
+    def rat(X,tol=1e-6):
 
         k = 0
         C = np.array([[1,0],[0,1]])
@@ -44,12 +36,29 @@ class __Private:
 
         return (C[0,0]/np.sign(C[1,0]),np.abs(C[1,0]))
 
-    def reduce_denom(self,X):
-        return self.rat(X)[1]
+    @staticmethod
+    def reduce_denom(X):
+        return _Private.rat(X)[1]
 
+    @staticmethod
+    def transition():
 
-__private = None
-    
+        if _Private.pdf is None:
+            _Private.pdf = np.zeros((24,),dtype=np.float64)
+            for i in range(24):
+                _Private.pdf[i] = np.exp(-0.5*np.log2(_Private.reduce_denom(
+                    np.float64(i+1)/24.0)))
+            _Private.pdf = _Private.pdf/np.sum(_Private.pdf)
+
+        if _Private.cdf is None:
+            _Private.cdf = np.cumsum(_Private.pdf)
+
+        # draw from uniform random distribution
+        u = np.random.rand()
+
+        return (((np.float64(np.array(np.where(u<_Private.cdf))[0][0])+1.)
+            / 24.0) + np.floor(np.random.exponential(0.5)))
+
 def mvnrnd(MU,SIGMA):
 
     # calculate dimensionality of multivariate normal
@@ -73,19 +82,11 @@ def mvnrnd(MU,SIGMA):
 
 def nextBeatLocation():
 
-    global __private
-    
-    # define prior pdf
-    if __private is None:
-        __private = __Private()
-
-    # draw from uniform random distribution
-    u = np.random.rand()
 
     # compute inverse transform
     #X = (((np.float64(np.array(np.where(u<__private.cdf))[0][0])+1.)
     #    / 24.0) + np.floor(np.random.exponential(0.5)))
-    X = (((np.float64(np.array(np.where(u<__private.cdf))[0][0])+1.)
-        / 24.0))
+    X = _Private.transition()
+
 
     return X
