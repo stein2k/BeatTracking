@@ -38,7 +38,7 @@ class _Private:
 
     @staticmethod
     def reduce_denom(X):
-        return _Private.rat(X)[1]
+        return np.int64(_Private.rat(X)[1])
 
     @staticmethod
     def transition():
@@ -90,3 +90,17 @@ def nextBeatLocation():
 
 
     return X
+
+def transitionPDF(X):
+
+    note_type = -1
+
+    # check for whole note
+    if np.abs(X-np.floor(X))<np.sqrt(eps):
+        note_type = np.int64(24)
+    else:
+        note_type = np.int64(24.0*(X-np.floor(X)))
+
+    return _Private.pdf[note_type]
+
+def observationPDF(X)

@@ -16,8 +16,8 @@ class Particle(object):
         self.ck = 0.
 
         # initialize Kalman filter properties
-        self.xkk = np.array(((0.,),(1.,)),dtype=np.float64)
-        self.Pkk = np.eye(2)
+        self.xkk = None #np.array(((0.,),(1.,)),dtype=np.float64)
+        self.Pkk = None #np.eye(2)
 
         self.H = np.array(((1.,0.),),dtype=np.float64)
 
@@ -32,6 +32,15 @@ class Particle(object):
         Pk = [None] * self.NumStates
         wk = [None] * self.NumStates
 
+        if self.xkk is None:
+    
+            self.xkk = [None] * self.NumStates
+            self.Pkk = [None] * self.NumStates
+
+            for n in range(self.NumStates):
+                self.xkk[n] = np.array(((0.,),(1.,)),dtype=np.float64)
+                self.Pkk[n] = np.eye(2)
+
         for s in range(self.NumStates):
 
             # randomly choos next beat location
@@ -39,7 +48,7 @@ class Particle(object):
             while (prevBeat+nextBeat)-self.ck < np.sqrt(
                 eps): nextBeat = prior.nextBeatLocation()
 
-            print "nextBeat[%d] =" % (s,) , nextBeat
+            #print "nextBeat[%d] =" % (s,) , nextBeat
 
             # propagate ck to new state
             Ck[s] = prevBeat+nextBeat
@@ -58,8 +67,8 @@ class Particle(object):
             # Kalman filter
 
             # time update (prediction)
-            x_est = np.dot(PHI,self.xkk)
-            P_est = (np.dot(PHI,np.dot(self.Pkk,PHI.T)) + 
+            x_est = np.dot(PHI,self.xkk[s])
+            P_est = (np.dot(PHI,np.dot(self.Pkk[s],PHI.T)) + 
                 0.2*Q)
 
             # update
@@ -67,10 +76,9 @@ class Particle(object):
             S = (np.dot(self.H,np.dot(P_est,self.H.T)) + 
                 0.02*np.eye(1))
             K = np.dot(np.dot(P_est,self.H.T),np.linalg.inv(S))
-            Ck[s] = x_est + np.dot(K,y)
-            Pk[s] = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
+            self.xkk[s] = x_est + np.dot(K,y)
+            self.Pkk[s] = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
 
-            '''
             # evaluate new weight
             if self.__k == 1:
                 wk[s] = ((prior.transitionPDF(Ck[s])*
@@ -80,7 +88,6 @@ class Particle(object):
                 wk[s] = self.wk[-1] * ((prior.transitionPDF(Ck[s])*
                     prior.observationPDF(observation,Ck[s][0][0])) /
                     prior.importancePDF(Pk[s]))
-            '''
 
         '''
         q = ((np.linalg.det(2.0*np.pi*self.Pkk)**(-0.5)) * 
@@ -88,14 +95,14 @@ class Particle(object):
             self.Pkk),theta-self.xkk)))
         '''
 
+        print 'xkk =', self.xkk
+
         raw_input()
 
         # draw next state from prior distribution
-        randomState = prior.mvnrnd(self.xkk,self.Pkk)
-
-        self.theta = randomState
-
-        print "  self.theta =", self.theta
+        #randomState = prior.mvnrnd(self.xkk,self.Pkk)
+        #self.theta = randomState
+        #print "  self.theta =", self.theta
 
 if __name__ == '__main__':
 
