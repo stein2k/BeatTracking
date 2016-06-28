@@ -5,106 +5,89 @@ import prior
 eps = sys.float_info.epsilon
 
 class Particle(object):
-    def __init__(self):
+    def __init__(self,obj=None):
 
-        # number of internal states
-        self.NumStates = 30
+        if isinstance(obj,Particle):
+            self.n = obj.n
+            self.theta = obj.theta
+            self.wk = obj.wk
+            self.ck = obj.ck
+            self.xkk = obj.xkk
+            self.Pkk = obj.Pkk
 
-        # initialize particle
-        self.__k = 1
-        self.theta = np.array(((0.,),(0.,)),dtype=np.float64)
-        self.ck = 0.
+        else:
 
-        # initialize Kalman filter properties
-        self.xkk = None #np.array(((0.,),(1.,)),dtype=np.float64)
-        self.Pkk = None #np.eye(2)
+            self.n = 0
+
+            # number of internal states
+            self.NumStates = 30
+
+            # initialize particle
+            self.theta = np.array(((0.,),(0.,)),dtype=np.float64)
+            self.wk = 1.0
+            self.ck = 0.
+
+            # initialize Kalman filter properties
+            self.xkk = np.array(((0.,),(1.,)),dtype=np.float64)
+            self.Pkk = np.eye(2)
 
         self.H = np.array(((1.,0.),),dtype=np.float64)
 
-    def step(self,observation,beatlocation=None):
+    def step(self,observation,ck=None):
 
         # determine location of previous whole beat
         prevBeat = np.floor(self.ck)
 
-        # create array for set s= {1,...,S} of new
-        # score locations c(s,k)
-        Ck = [None] * self.NumStates
-        Pk = [None] * self.NumStates
-        wk = [None] * self.NumStates
+        # randomly choos next beat location
+        nextBeat = prior.nextBeatLocation()
+        while (prevBeat+nextBeat)-self.ck < np.sqrt(
+            eps): nextBeat = prior.nextBeatLocation()
 
-        if self.xkk is None:
-    
-            self.xkk = [None] * self.NumStates
-            self.Pkk = [None] * self.NumStates
+        if ck is not None:
+            next_ck = ck
+            gamma = ck-self.ck
+        else:
+            next_ck = prevBeat+nextBeat
+            gamma = prevBeat+nextBeat-self.ck
 
-            for n in range(self.NumStates):
-                self.xkk[n] = np.array(((0.,),(1.,)),dtype=np.float64)
-                self.Pkk[n] = np.eye(2)
+        # compose covariance matrix
+        Q = np.array((((gamma**3)/3.0,(gamma**2)/2.0),
+            ((gamma**2)/2.0,gamma)),dtype=np.float64)
 
-        for s in range(self.NumStates):
+        # compose transition matrix
+        PHI = np.array(((1.0,gamma),(0.,1.)),dtype=np.float64)
 
-            # randomly choos next beat location
-            nextBeat = prior.nextBeatLocation()
-            while (prevBeat+nextBeat)-self.ck < np.sqrt(
-                eps): nextBeat = prior.nextBeatLocation()
+        # update covariance estimate using
+        # Kalman filter
 
-            #print "nextBeat[%d] =" % (s,) , nextBeat
+        # time update (prediction)
+        x_est = np.dot(PHI,self.xkk)
+        P_est = (np.dot(PHI,np.dot(self.Pkk,PHI.T)) + 
+            (0.06**2)*Q)
 
-            # propagate ck to new state
-            Ck[s] = prevBeat+nextBeat
+        # update
+        y = observation - np.dot(self.H,x_est)
+        S = (np.dot(self.H,np.dot(P_est,self.H.T)) + 
+            (0.02**2)*np.eye(1))
+        K = np.dot(np.dot(P_est,self.H.T),np.linalg.inv(S))
+        self.xkk = x_est + np.dot(K,y)
+        self.Pkk = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
 
-            # calculate random jump paramater gamma
-            gamma = Ck[s]-self.ck
+        # pick a new state for particle
+        self.theta = prior.mvnrnd(self.xkk,self.Pkk)
 
-            # compose covariance matrix
-            Q = np.array((((gamma**3)/3.0,(gamma**2)/2.0),
-                ((gamma**2)/2.0,gamma)),dtype=np.float64)
+        # evaluate new weight
+        self.wk = self.wk * np.float64((prior.transitionPDF(next_ck) *
+            prior.observationPDF(y,S)) /
+            prior.importancePDF(self.theta,
+            self.xkk,self.Pkk))
 
-            # compose transition matrix
-            PHI = np.array(((1.0,gamma),(0.,1.)),dtype=np.float64)
-
-            # update covariance estimate using
-            # Kalman filter
-
-            # time update (prediction)
-            x_est = np.dot(PHI,self.xkk[s])
-            P_est = (np.dot(PHI,np.dot(self.Pkk[s],PHI.T)) + 
-                0.2*Q)
-
-            # update
-            y = observation - np.dot(self.H,x_est)
-            S = (np.dot(self.H,np.dot(P_est,self.H.T)) + 
-                0.02*np.eye(1))
-            K = np.dot(np.dot(P_est,self.H.T),np.linalg.inv(S))
-            self.xkk[s] = x_est + np.dot(K,y)
-            self.Pkk[s] = np.dot(np.eye(2)-np.dot(K,self.H),P_est)
-
-            # evaluate new weight
-            if self.__k == 1:
-                wk[s] = ((prior.transitionPDF(Ck[s])*
-                    prior.observationPDF(observation,Ck[s][0][0])) /
-                    prior.importancePDF(Pk[s]))
-            else:
-                wk[s] = self.wk[-1] * ((prior.transitionPDF(Ck[s])*
-                    prior.observationPDF(observation,Ck[s][0][0])) /
-                    prior.importancePDF(Pk[s]))
-
-        '''
-        q = ((np.linalg.det(2.0*np.pi*self.Pkk)**(-0.5)) * 
-            np.exp(-0.5*np.dot(np.dot(np.transpose(theta-self.xkk),
-            self.Pkk),theta-self.xkk)))
-        '''
-
-        print 'xkk =', self.xkk
-
-        raw_input()
-
-        # draw next state from prior distribution
-        #randomState = prior.mvnrnd(self.xkk,self.Pkk)
-        #self.theta = randomState
-        #print "  self.theta =", self.theta
+        self.ck = ck
+        self.n = self.n + 1
 
 if __name__ == '__main__':
+
+    ck = np.float64(0)
 
     particle = Particle()
 
@@ -114,8 +97,62 @@ if __name__ == '__main__':
     particle.theta = theta
 
     for n in range(100):
-        nextbeat = prior.nextBeatLocation()
-        PHI = np.array(((1.,nextbeat),(0.,1.)),dtype=np.float64)
+
+        print "n =", n
+
+        # determine location of previous whole beat
+        prevBeat = np.floor(ck)
+
+        # randomly choos next beat location
+        nextBeat = prior.nextBeatLocation()
+        while (prevBeat+nextBeat)-ck < np.sqrt(
+            eps): nextBeat = prior.nextBeatLocation()
+
+        # compute random jump
+        gamma = (prevBeat+nextBeat)-ck
+
+        particle_list = [None] * 30
+        for i in range(30):
+            particle_list[i] = Particle(particle)
+
+        PHI = np.array(((1.,gamma),(0.,1.)),dtype=np.float64)
         theta = np.dot(PHI,theta)
+
         print "theta =", theta
-        particle.step(theta[0,0],nextbeat)
+        for i in range(30):
+            if n<20 or i==0:
+                particle_list[i].step(theta[0,0],prevBeat+nextBeat)
+            else:
+                particle_list[i].step(theta[0,0])
+    
+        wk = np.empty((30,))
+        for i in range(30):
+            wk[i] = particle_list[i].wk
+
+        for i in range(30):
+            particle_list[i].wk = particle_list[i].wk / np.sum(wk)
+
+        for i in range(30):
+            wk[i] = particle_list[i].wk
+
+        theta_mmse = np.array(((0.,),(0.,)))
+        for i in range(30):
+            theta_mmse = theta_mmse + (particle_list[i].wk * 
+                particle_list[i].theta)
+
+        print 'theta_mmse =', theta_mmse
+        print 'wk =', wk
+
+        if n > 20:
+            raw_input()
+
+        # draw next state from prior distribution
+        #randomState = prior.mvnrnd(self.xkk,self.Pkk)
+        #self.theta = randomState
+        #print "  self.theta =", self.theta
+
+        particle = particle_list[0]
+
+        # update quantized score location
+        ck = prevBeat+nextBeat
+

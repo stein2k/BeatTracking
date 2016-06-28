@@ -97,10 +97,20 @@ def transitionPDF(X):
 
     # check for whole note
     if np.abs(X-np.floor(X))<np.sqrt(eps):
-        note_type = np.int64(24)
+        note_type = np.int64(23)
     else:
         note_type = np.int64(24.0*(X-np.floor(X)))
 
     return _Private.pdf[note_type]
 
-def observationPDF(X)
+def observationPDF(X,SIGMA):
+    p = ((np.linalg.det(SIGMA)**(-0.5)) *
+        np.exp(-0.5*np.dot(X.T,np.dot(np.linalg.inv(SIGMA),
+        X)))/2.0/np.pi)
+    return p
+
+def importancePDF(X,MU,SIGMA):
+    p = ((np.linalg.det(SIGMA)**(-0.5)) *
+        np.exp(-0.5*np.dot(np.transpose(X-MU),np.dot(
+        np.linalg.inv(SIGMA),X-MU)))) / 2.0 / np.pi
+    return p
