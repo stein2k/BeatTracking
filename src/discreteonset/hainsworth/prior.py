@@ -41,7 +41,7 @@ class _Private:
         return np.int64(_Private.rat(X)[1])
 
     @staticmethod
-    def transition():
+    def transition(X):
 
         if _Private.pdf is None:
             _Private.pdf = np.zeros((24,),dtype=np.float64)
@@ -56,8 +56,14 @@ class _Private:
         # draw from uniform random distribution
         u = np.random.rand()
 
-        return (((np.float64(np.array(np.where(u<_Private.cdf))[0][0])+1.)
-            / 24.0) + np.floor(np.random.exponential(0.5)))
+        # determine note type
+        tmp = np.float64(np.array(np.where(u<_Private.cdf))[0][0])
+        note_type = 1.0 / _Private.reduce_denom((tmp+1.0)/24.0)
+
+        if np.abs(np.round(X/note_type)-X/note_type) < np.sqrt(eps):
+            return X+note_type
+        else:
+            return np.ceil(X/note_type)*note_type
 
 def mvnrnd(MU,SIGMA):
 
@@ -80,13 +86,13 @@ def mvnrnd(MU,SIGMA):
 
     return x
 
-def nextBeatLocation():
+def nextBeatLocation(X=0):
 
 
     # compute inverse transform
     #X = (((np.float64(np.array(np.where(u<__private.cdf))[0][0])+1.)
     #    / 24.0) + np.floor(np.random.exponential(0.5)))
-    X = _Private.transition()
+    X = _Private.transition(X)
 
 
     return X
