@@ -88,7 +88,7 @@ class Particle(object):
         # time update (prediction)
         x_est = np.dot(PHI,self.xkk)
         P_est = (np.dot(PHI,np.dot(self.Pkk,PHI.T)) + 
-            1e-3*Q)
+            1e-4*Q)
 
         # update
         y = observation - np.dot(self.H,x_est)
@@ -158,7 +158,8 @@ if __name__ == '__main__':
             for j in range(30):
                 particle_list[i*30+j] = Particle(my_particles[i])
 
-        print "theta =", theta
+        print "tempo =", 60.0/theta[1]
+
         for i in range(3000):
             particle_list[i].step(theta[0,0])
 
@@ -195,16 +196,7 @@ if __name__ == '__main__':
             theta_mmse = theta_mmse + (particle_list_sorted[i][0].wk * 
                 particle_list_sorted[i][0].theta)
 
-        print 'theta_mmse =', theta_mmse, ", ck =", nextBeat, ", Wk =", Wk, ", Neff =", Neff
-
-        for i in range(10):
-            p = particle_list_sorted002[i][0]
-            print "i =", i, ", wk =", p.wk, ", p.theta =", p.theta.flatten(), ", p.theta_est =", p.theta_est.flatten(), ", (a,b,c) =", (p.a,p.b,p.c), ", ck =", p.ck
-            p = particle_list_sorted[i][0]
-            print "*** i =", i, ", wk =", p.wk, ", p.theta =", p.theta.flatten(), ", p.theta_est =", p.theta_est.flatten(), ", (a,b,c) =", (p.a,p.b,p.c), ", ck =", p.ck
-
-        if n > 29:
-            raw_input()
+        print 'estimated_tempo =', 60.0/theta_mmse[1]
 
         # draw next state from prior distribution
         #randomState = prior.mvnrnd(self.xkk,self.Pkk)
